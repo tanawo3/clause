@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clause - grounded policy rulings</title>
+<meta name="description" content="Ask whether something is permitted under a specific written policy. A validator set reads the document and records a ruling grounded in the governing passage - on GenLayer." />
+<meta property="og:title" content="Clause - grounded policy rulings" />
+<meta property="og:description" content="Permitted, Prohibited, or Unclear - decided by reading the policy, not by trusting a referee." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#1a1714" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%231a1714'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23e9e3d4' text-anchor='middle'%3E%C2%A7%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://rsms.me/"><link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<link rel="stylesheet" href="./styles.css?v=1">
+</head>
+<body>
+
+<a class="skip" href="#app">Skip to content</a>
+
+<header class="masthead">
+  <div class="mast-inner">
+    <a class="wordmark" href="#/"><span class="sec">&sect;</span> Clause</a>
+    <nav class="mast-nav" aria-label="Primary">
+      <a href="#/" class="mnl" data-route="docket">The Docket</a>
+      <a href="#/method" class="mnl" data-route="method">How it&rsquo;s decided</a>
+    </nav>
+    <div class="mast-end">
+      <span id="walletslot"><button class="btn outline" id="connectBtn">Connect wallet</button></span>
+      <a href="#/file" class="btn ink">File a query</a>
+    </div>
+  </div>
+  <div class="mast-rule" aria-hidden="true"></div>
+</header>
+
+<main id="app" tabindex="-1"><p class="loading">Opening the docket&hellip;</p></main>
+
+<footer class="colophon">
+  <div class="colo-inner">
+    <span class="colo-mark"><span class="sec">&sect;</span> Clause</span>
+    <span class="colo-mid">Rulings are decided by reading the cited policy and recorded on-chain with the governing passage. No referee, no edits.</span>
+    <span class="colo-built">Built on <a href="https://docs.genlayer.com/" target="_blank" rel="noopener">GenLayer</a> &middot; <span id="netLabel">studionet</span></span>
+  </div>
+</footer>
+
+<div id="log" aria-live="polite"></div>
+<script type="module" src="./app.js?v=1"></script>
+</body>
+</html>

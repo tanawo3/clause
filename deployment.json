@@ -1,0 +1,33 @@
+{
+  "project": "29-clause",
+  "name": "Clause",
+  "network": "studionet",
+  "chainId": 61999,
+  "rpc": "https://studio.genlayer.com/api",
+  "explorer": "https://explorer-studio.genlayer.com",
+  "contractAddress": "0x43D229F781dC44758A45FB683c4c785500769010",
+  "deployTxHash": "0x8eaeaac25d8269773241fcb37479b6b7b58b3bfade794602dc6dbbe404f3b722",
+  "contractExplorer": "https://explorer-studio.genlayer.com/contracts/0x43D229F781dC44758A45FB683c4c785500769010",
+  "deployer": "0x6ED2466E9e1a9C9D97Fbbc86c17E7a74f5FE6955",
+  "deployedAt": "2026-06-24T03:25:12.781Z",
+  "statusName": 7,
+  "smoke": {
+    "set_claim_standard": "0x395e8d5dfebeda0801276fa1150aebad6960742205861565acaf8fe213be8145",
+    "file_query": "0x08c7cbd6da5ca6b283a9f3fa8c02323e5c6d51fb3907e07197dc5dee4e2f8f70",
+    "add_obligation": "0x41c97ba0a50729bcef127c7222fbaa228e0a94f6a4cccced542ffa124b0e68c1",
+    "add_evidence_docs": "0x270421b6604b5ba8d7136c0f32b68ce72d6e713fae2d8b8d1ffabc7a75956846",
+    "add_evidence_web": "0xf86c265a23c33441c4a00744563077762406969e0ad99ee1c5c12fd064b2932b",
+    "open_review": "0xf358f62061b33a78f8b44679c7607fab54dba9fc17e87fda1441df4304d21c5e",
+    "review": "0xbe9a42ea9e05ab57c7220771ed9cb4866b781c45ebe7349698ef34cf94b3d5b8",
+    "open_challenge_window": "0x1f52d723c4679dd58274f1a18adcb913fb5449aa7ca5c02a1e7579fc10e1bb12",
+    "submit_challenge": "0xf80890cd091615046cc4c3a578c8d9b95b3830128ab4fed64ba8024b32ab02a2",
+    "resolve_challenge": "0x761f19161ff30996debcc45b814766d60dcaf9fd3d7bc1cb752561df92228c35",
+    "submit_appeal": "0xa903cd1c97c7184c1b8287586bb3ae06470bb64b1c5d123ac94684f87b6fe2b5",
+    "resolve_appeal": "0x75ab23c6fe8ac62092e9f082bb827da874df4d2d625501e4f01e83085aa71da6",
+    "rule": "0xc8551d446f34ebeede1826495ac9cefff6dff063b3f96929c1b78bb719a8cd0b",
+    "recalculate_reputation": "0xfd4c9a3cea44fcf65730dd04cb35ddc1f0d23d826815fe0f041f5230db99eea0",
+    "queryId": "0",
+    "challengeId": "0",
+    "appealId": "0"
+  }
+}
