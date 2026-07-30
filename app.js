@@ -1,4 +1,5 @@
-import { makeReader, write, connectWallet, activeAccount, short, fmtErr } from "../shared/genlayer-lite.js";
+import { makeReader, write, connectWallet, activeAccount, short, fmtErr } from "./shared/genlayer-lite.js";
+import { mountReviewDesk } from "./shared/review-desk.js";
 import { CONTRACT, NETWORK, DEMO } from "./config.js";
 
 const { read } = makeReader(CONTRACT);
@@ -6,13 +7,22 @@ const VERDICT = ["Pending", "Permitted", "Prohibited", "Unclear"];
 const STAMP = ["pending", "permit", "prohibit", "unclear"];
 const $ = (id) => document.getElementById(id);
 const app = () => $("app");
+
+queueMicrotask(() => mountReviewDesk({
+  contract: CONTRACT, read, write, ensureWallet, fmtErr,
+  entity: "Policy query", idLabel: "Query ID", countMethod: "get_claim_count", recordMethod: "get_claim_record",
+  openWindowMethod: "open_challenge_window", submitChallengeMethod: "submit_challenge", resolveChallengeMethod: "resolve_challenge_with_genlayer",
+  submitAppealMethod: "submit_appeal", resolveAppealMethod: "resolve_appeal_with_genlayer", archiveMethod: "archive_claim",
+  variant: "docket", kicker: "Policy interpretation review", title: "Clause appeal docket",
+  intro: "Read the cited rule beside its ruling, file a source-backed objection, and preserve a complete challenge and appeal trail before archival.",
+}));
 const esc = (s) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return u; } };
 
 // Demo records are clearly labelled and never claim to be on-chain.
 const DEMO_QUERIES = [
-  { id: 0, asker: "0xDEMO…", question: "May I use this software for commercial purposes?", policy_url: "https://example.com/mit", status: 1, passage: "Permission is hereby granted, free of charge, to any person…", rationale: "The licence grants unrestricted use including commercial.", archived: 0 },
-  { id: 1, asker: "0xDEMO…", question: "Is it permitted to remove the copyright notice?", policy_url: "https://example.com/mit", status: 2, passage: "The above copyright notice…shall be included in all copies.", rationale: "The notice must be retained.", archived: 0 },
+  { id: 0, asker: "0xDEMO...", question: "May I use this software for commercial purposes?", policy_url: "https://example.com/mit", status: 1, passage: "Permission is hereby granted, free of charge, to any person...", rationale: "The licence grants unrestricted use including commercial.", archived: 0 },
+  { id: 1, asker: "0xDEMO...", question: "Is it permitted to remove the copyright notice?", policy_url: "https://example.com/mit", status: 2, passage: "The above copyright notice...shall be included in all copies.", rationale: "The notice must be retained.", archived: 0 },
 ];
 
 let account = null, queries = [], stats = null;
@@ -37,10 +47,11 @@ async function ensureWallet() { if (!account) account = await connectWallet(); a
 
 async function load() {
   if (DEMO) { queries = DEMO_QUERIES.slice(); stats = tally(queries); return; }
-  stats = await read("get_stats");
-  const n = Number(await read("get_query_count"));
-  const out = [];
-  for (let i = 0; i < n; i++) { const q = await read("get_query", [i]); if (Number(q.archived) === 0) out.push({ id: i, ...q }); }
+  const [statsRaw, countRaw] = await Promise.all([read("get_stats"), read("get_query_count")]);
+  stats = statsRaw;
+  const n = Number(countRaw);
+  const records = await Promise.all(Array.from({ length: n }, (_, i) => read("get_query", [i]).then((q) => ({ id: i, ...q }))));
+  const out = records.filter((q) => Number(q.archived) === 0);
   queries = out;
 }
 function tally(qs) { const s = { total: qs.length, permitted: 0, prohibited: 0, unclear: 0, pending: 0 }; qs.forEach((q) => { s[["pending", "permitted", "prohibited", "unclear"][q.status]]++; }); return s; }
@@ -161,7 +172,7 @@ function renderFile() {
       </div>
       <div class="field">
         <label for="fU">Policy document URL</label>
-        <input id="fU" type="url" maxlength="300" aria-describedby="uErr" placeholder="https://… the governing terms, licence or policy" />
+        <input id="fU" type="url" maxlength="300" aria-describedby="uErr" placeholder="https://... the governing terms, licence or policy" />
         <div class="err" id="uErr" hidden></div>
       </div>
       <button class="btn ink lg" type="submit" id="fileBtn">File for ruling</button>

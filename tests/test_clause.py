@@ -1,119 +1,115 @@
-"""Direct-mode tests for CLAUSE.
+"""Executable Clause V2 authorization and settlement-invariant tests."""
 
-These cover the deterministic surface: validation, boundaries, authorization,
-duplicate prevention, invalid state transitions and reads after writes.
-
-The non-deterministic rule() path (web.get + exec_prompt under the Equivalence
-Principle) is exercised live on studionet via scripts/seed_data.py, because the
-direct runner used here does not mock GenVM's leader/validator nondet flow.
-Documented as an explicit limitation of the available local tooling.
-"""
+import json
 from pathlib import Path
 
-CONTRACT = str(Path(__file__).resolve().parents[1] / "contracts" / "clause.py")
-PENDING = 0; PERMITTED = 1; PROHIBITED = 2; UNCLEAR = 3
-URL = "https://example.com/policy"
+
+CONTRACT = str(Path(__file__).resolve().parents[1] / "contracts" / "clause_v2.py")
 
 
-def test_file_query_success(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    qid = c.file_query("May I bring a guest to the coworking space?", URL)
-    assert qid == 0
-    q = c.get_query(0)
-    assert q["status"] == PENDING
-    assert q["policy_url"] == URL
-    assert q["archived"] == 0
-    assert q["passage"] == "" and q["rationale"] == ""
+def _deploy_and_draft(deploy, vm, owner, counterparty):
+    vm.warp("2026-07-16T12:00:00Z")
+    vm.sender = owner
+    contract = deploy(CONTRACT)
+    peer = "0x" + counterparty.hex()
+    record_id = contract.draft_claim(peer, "Policy interpretation", "Public policy text supports the condition", "https://example.com", "legal", "0")
+    return contract, record_id
 
 
-def test_empty_question_reverts(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    with direct_vm.expect_revert("a question is required"):
-        c.file_query("   ", URL)
+def _mock_review(vm):
+    vm.mock_llm(
+        r"Reply ONLY JSON with keys: outcome",
+        json.dumps({
+            "outcome": "met",
+            "confidenceBps": 8400,
+            "triggerBps": 8500,
+            "acceptanceBps": 8500,
+            "grantBps": 8500,
+            "settlementBps": 8500,
+            "deliveryBps": 8500,
+            "summary": "The submitted public evidence satisfies the standard.",
+            "rationale": "The source and stated condition agree.",
+            "riskFlags": [],
+        }),
+    )
 
 
-def test_empty_url_reverts(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    with direct_vm.expect_revert("a policy URL is required"):
-        c.file_query("Is X allowed?", "  ")
+def _mock_ruling(vm, kind, ruling, revised):
+    vm.mock_llm(
+        rf"resolving .* {kind}",
+        json.dumps({
+            "ruling": ruling,
+            "revisedOutcome": revised,
+            "confidenceDeltaBps": -900 if revised == "not_met" else 700,
+            "reason": "The filing supplies controlling public evidence.",
+            "riskFlags": [],
+        }),
+    )
 
 
-def test_non_http_url_reverts(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    with direct_vm.expect_revert("must be http"):
-        c.file_query("Is X allowed?", "ftp://example.com/policy")
-
-
-def test_question_max_boundary(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    ok = "a" * 240
-    assert c.file_query(ok, URL) == 0          # 240 is allowed
-    with direct_vm.expect_revert("exceeds 240"):
-        c.file_query("b" * 241, URL)           # 241 is rejected
-
-
-def test_url_max_boundary(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    long_url = "https://example.com/" + ("p" * 290)  # > 300
-    with direct_vm.expect_revert("exceeds 300"):
-        c.file_query("Is X allowed?", long_url)
-
-
-def test_duplicate_prevention(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    c.file_query("Can I expense lunch?", URL)
-    with direct_vm.expect_revert("already filed this exact query"):
-        c.file_query("Can I expense lunch?", URL)
-
-
-def test_same_question_different_asker_ok(deploy, direct_vm, direct_alice, direct_bob):
-    c = deploy(CONTRACT)
-    direct_vm.sender = direct_alice
-    c.file_query("Can I expense lunch?", URL)
+def test_admin_standard_and_review_permissions_execute(
+    deploy, direct_vm, direct_alice, direct_bob, direct_charlie
+):
+    contract, record_id = _deploy_and_draft(
+        deploy, direct_vm, direct_alice, direct_bob
+    )
     direct_vm.sender = direct_bob
-    assert c.file_query("Can I expense lunch?", URL) == 1  # different asker -> allowed
+    with direct_vm.expect_revert("admin_only"):
+        contract.set_claim_standard("attacker-controlled settlement standard")
+
+    direct_vm.sender = direct_charlie
+    with direct_vm.expect_revert("record_operator_only"):
+        contract.review_claim_with_genlayer(str(record_id))
 
 
-def test_unauthorized_archive_reverts(deploy, direct_vm, direct_alice, direct_bob):
-    # archive() checks ownership before anything else
-    c = deploy(CONTRACT)
-    owner = c.get_owner()
-    non_owner = direct_bob if str(direct_alice).lower() == str(owner).lower() else direct_alice
-    direct_vm.sender = non_owner
-    with direct_vm.expect_revert("only the owner can archive"):
-        c.archive(0)
-
-
-def test_owner_can_archive_and_hide(deploy, direct_vm):
-    # the deployer (current direct_vm.sender) is the owner
-    c = deploy(CONTRACT)
-    c.file_query("Is X allowed?", URL)
-    c.archive(0)
-    assert c.get_query(0)["archived"] == 1
-    # archived queries drop out of stats
-    assert c.get_stats()["total"] == 0
-
-
-def test_no_such_query(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
+def test_maturity_challenge_appeal_and_final_settlement_execute(
+    deploy, direct_vm, direct_alice, direct_bob, direct_charlie
+):
+    contract, record_id = _deploy_and_draft(
+        deploy, direct_vm, direct_alice, direct_bob
+    )
     direct_vm.sender = direct_alice
-    with direct_vm.expect_revert("no such query"):
-        c.get_query(5)
+    _mock_review(direct_vm)
+    contract.review_claim_with_genlayer(str(record_id))
 
+    with direct_vm.expect_revert("review_not_mature"):
+        contract.settle(record_id)
 
-def test_stats_and_read_after_write(deploy, direct_vm, direct_alice):
-    c = deploy(CONTRACT)
+    contract.open_challenge_window(str(record_id))
+    direct_vm.sender = direct_charlie
+    challenge_id = contract.submit_challenge(
+        str(record_id),
+        "The initial source was superseded.",
+        "https://example.org/challenge",
+    )
+
     direct_vm.sender = direct_alice
-    c.file_query("Question one?", URL)
-    c.file_query("Question two?", URL)
-    s = c.get_stats()
-    assert s["total"] == 2 and s["pending"] == 2
-    assert c.get_query_count() == 2
-    assert c.get_query(1)["question"] == "Question two?"
+    with direct_vm.expect_revert("open_review_filing"):
+        contract.settle(record_id)
+
+    _mock_ruling(direct_vm, "challenge", "accepted", "not_met")
+    contract.resolve_challenge_with_genlayer(str(record_id), challenge_id)
+    record = json.loads(contract.get_claim_record(str(record_id)))
+    assert record["outcome"] == "not_met"
+
+    direct_vm.sender = direct_charlie
+    appeal_id = contract.submit_appeal(
+        str(record_id),
+        "A final official publication controls the decision.",
+        "https://example.net/appeal",
+    )
+
+    direct_vm.sender = direct_alice
+    with direct_vm.expect_revert("open_review_filing"):
+        contract.settle(record_id)
+
+    _mock_ruling(direct_vm, "appeal", "granted", "met")
+    contract.resolve_appeal_with_genlayer(str(record_id), appeal_id)
+    direct_vm.warp("2026-07-16T13:00:01Z")
+    contract.settle(record_id)
+
+    record = json.loads(contract.get_claim_record(str(record_id)))
+    assert record["outcome"] == "met"
+    assert record["status"] == "RESOLVED"
+    assert record["challengeIds"] == [challenge_id]
+    assert record["appealIds"] == [appeal_id]
