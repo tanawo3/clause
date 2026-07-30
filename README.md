@@ -8,8 +8,8 @@ Clause is a compact rule desk. Users file a policy query, attach official eviden
 
 | Surface | Link |
 | --- | --- |
-| Live app | https://assmore22-clause.vercel.app |
-| GitHub | https://github.com/assmore22/clause |
+| Live app | https://tanawo3-clause.vercel.app |
+| GitHub | https://github.com/tanawo3/clause |
 | Contract | https://explorer-studio.genlayer.com/address/0x43D229F781dC44758A45FB683c4c785500769010 |
 
 ## Chain Record
