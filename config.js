@@ -1,5 +1,5 @@
 // Clause configuration. In this static stack this module stands in for build-time values.
-export const CONTRACT = "0x43D229F781dC44758A45FB683c4c785500769010";
+export const CONTRACT = "0x7a7Cf4eaD9e577e2061628e348A6b16524dA8AA4";
 export const NETWORK = "studionet";
 export const CHAIN_ID = "0xf22f";
 export const EXPLAINER_DOC = "https://docs.genlayer.com/";

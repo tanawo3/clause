@@ -121,16 +121,18 @@ function renderRecord(id) {
   if (!q) { app().innerHTML = `<div class="sheet"><button class="back" onclick="location.hash='#/'">&larr; The Docket</button><p class="empty">No such ruling on the docket.</p></div>`; return; }
   const sc = STAMP[q.status];
   const ruled = q.status !== 0;
+  const lifecycle = q.lifecycleStatus || "OPEN";
   const passage = ruled && q.passage
     ? `<div class="rec-section"><div class="rec-h">Governing passage</div><blockquote class="passage">&ldquo;${esc(q.passage)}&rdquo;</blockquote></div>` : "";
   const rationale = ruled && q.rationale
     ? `<div class="rec-section"><div class="rec-h">Reasoning</div><p class="rationale">${esc(q.rationale)}</p></div>` : "";
-  const pendingBlock = !ruled ? `
+  const pendingBlock = lifecycle === "OPEN" ? `
     <div class="rec-section">
       <p class="rationale">This query has been filed but not yet ruled. Request a ruling and a validator set will read the policy and decide.</p>
       <div class="rec-actions">${DEMO ? "" : `<button class="btn ox lg" id="ruleBtn">Request a ruling</button>`}</div>
       <div class="processing" id="proc" hidden><span class="spin"></span> Validators are reading the policy and forming consensus&hellip; this can take a moment.</div>
     </div>` : "";
+  const lifecycleBlock = lifecycle !== "OPEN" ? `<div class="rec-section"><div class="rec-h">Lifecycle</div><p class="rationale"><span class="mono">${esc(lifecycle)}</span>. The provisional ruling remains challengeable until its on-chain review windows close.</p>${q.canFinalize ? `<div class="rec-actions"><button class="btn ox lg" id="finalizeBtn">Finalize ruling</button></div>` : ""}</div>` : "";
 
   app().innerHTML = `<div class="sheet">
     <button class="back" id="backBtn">&larr; The Docket</button>
@@ -138,7 +140,7 @@ function renderRecord(id) {
       <div>
         <p class="kicker">Ruling No. ${String(q.id + 1).padStart(2, "0")}</p>
         <h1 class="rec-q">${esc(q.question)}</h1>
-        ${passage}${rationale}${pendingBlock}
+        ${passage}${rationale}${pendingBlock}${lifecycleBlock}
       </div>
       <aside class="rec-aside" aria-label="Record details">
         <div class="stamp-wrap"><span class="stamp ${sc} stamp-lg">${VERDICT[q.status]}</span></div>
@@ -154,6 +156,7 @@ function renderRecord(id) {
   $("backBtn").onclick = () => { location.hash = "#/"; };
   $("copyId").onclick = () => { navigator.clipboard?.writeText(String(q.id)); toast("Record id copied.", "ok"); };
   if ($("ruleBtn")) $("ruleBtn").onclick = () => doRule(q.id);
+  if ($("finalizeBtn")) $("finalizeBtn").onclick = () => doFinalize(q.id);
 }
 
 /* ----------------------------- file ----------------------------- */
@@ -214,14 +217,24 @@ async function doRule(id) {
   if (btn) btn.disabled = true; if (proc) proc.hidden = false;
   try {
     await ensureWallet();
-    await write(CONTRACT, "rule", [id]);
-    toast("Ruling recorded on-chain.", "ok");
+    await write(CONTRACT, "review_claim_with_genlayer", [String(id)]);
+    toast("Provisional ruling recorded; challenge period opened.", "ok");
     await load(); renderRecord(id);
   } catch (e) {
     // Consensus failure / undetermined leaves the query PENDING (state unchanged).
     toast(fmtErr(e) + " - the query stays pending; you can retry.", "err");
     if (btn) btn.disabled = false; if (proc) proc.hidden = true;
   }
+}
+
+async function doFinalize(id) {
+  if (!confirm("Finalize this ruling after the challenge and appeal windows?")) return;
+  try {
+    await ensureWallet();
+    await write(CONTRACT, "finalize_query", [id]);
+    toast("Ruling finalized on-chain.", "ok");
+    await load(); renderRecord(id);
+  } catch (e) { toast(fmtErr(e), "err"); }
 }
 
 /* ----------------------------- method ----------------------------- */

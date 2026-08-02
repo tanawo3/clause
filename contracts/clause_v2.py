@@ -487,11 +487,19 @@ class Clause(gl.Contract):
         self._store_claim(a)
 
     @gl.public.write
-    def rule(self, dispute_id: int) -> None:
+    def rule(self, dispute_id: int) -> str:
         a = self._load_claim(str(dispute_id))
         if a.get("category", "") != "clause-query" and int(a.get("no_pool", "0")) <= 0:
             raise Exception("respondent_required")
-        self.settle(dispute_id)
+        return self.review_claim_with_genlayer(str(dispute_id))
+
+    @gl.public.write
+    def finalize_query(self, query_id: int) -> str:
+        a = self._load_claim(str(query_id))
+        if a.get("category", "") != "clause-query":
+            raise Exception("not_clause_query")
+        self.settle(query_id)
+        return "FINALIZED"
 
     @gl.public.write
     def review_dispute_with_genlayer(self, dispute_id: str) -> str:
@@ -776,7 +784,10 @@ class Clause(gl.Contract):
             raw = gl.nondet.exec_prompt(_review_prompt(standard, self._public(a), self._evidence_text(a), self._obligations_text(a)), response_format="json")
             return json.dumps(_norm_review(raw), sort_keys=True)
 
-        res = json.loads(gl.eq_principle.prompt_comparative(leader, "Equal if same outcome and confidence within 1500 bps."))
+        res = json.loads(gl.eq_principle.prompt_comparative(
+            leader,
+            "Equal only if outcome, confidenceBps, triggerBps and riskFlags are exactly identical.",
+        ))
         rid = str(len(self.reviews))
         self.reviews.append(json.dumps({"id": rid, "claimId": claim_id, "reviewer": actor,
                                         "outcome": res["outcome"], "confidenceBps": res["confidenceBps"],
@@ -794,8 +805,8 @@ class Clause(gl.Contract):
         a["challengeDeadline"] = str(_now() + 3600)
         a["appealDeadline"] = "0"
         before = a["status"]
-        self._set_status(a, "REVIEWED")
-        self._add_audit(a, actor, "review_claim_with_genlayer", res["summary"], before, "REVIEWED")
+        self._set_status(a, "CHALLENGE_WINDOW")
+        self._add_audit(a, actor, "review_claim_with_genlayer", res["summary"], before, "CHALLENGE_WINDOW")
         self._store_claim(a)
         return res["outcome"]
 
@@ -804,7 +815,6 @@ class Clause(gl.Contract):
         self.clock += 1
         actor = gl.message.sender_address.as_hex
         a = self._load_claim(str(claim_id))
-        self._require_operator(a)
         if a["status"] in ("RESOLVED", "ARCHIVED"):
             raise Exception("claim_already_closed")
         if a["outcome"] == "pending" or a["status"] not in ("REVIEWED", "CHALLENGE_WINDOW", "APPEALED"):
@@ -886,7 +896,8 @@ class Clause(gl.Contract):
         self.clock += 1
         actor = gl.message.sender_address.as_hex
         a = self._load_claim(claim_id)
-        self._require_operator(a)
+        if a["status"] == "CHALLENGE_WINDOW" and _now() <= int(a.get("challengeDeadline", "0")):
+            return "CHALLENGE_WINDOW"
         if a["status"] != "REVIEWED":
             raise Exception("invalid_transition")
         if _now() > int(a.get("challengeDeadline", "0")):
@@ -936,7 +947,10 @@ class Clause(gl.Contract):
             raw = gl.nondet.exec_prompt(_ruling_prompt("challenge", self._public(a), a["outcome"], ch["claim"], txt), response_format="json")
             return json.dumps(_norm_ruling(raw, ("accepted", "rejected", "partially_accepted", "inconclusive"), "inconclusive"), sort_keys=True)
 
-        res = json.loads(gl.eq_principle.prompt_comparative(leader, "Equal if same ruling."))
+        res = json.loads(gl.eq_principle.prompt_comparative(
+            leader,
+            "Equal only if ruling, revisedOutcome, confidenceDeltaBps and riskFlags are exactly identical.",
+        ))
         ch["status"] = res["ruling"]
         ch["ruling"] = res["reason"]
         ch["confidenceDeltaBps"] = res["confidenceDeltaBps"]
@@ -997,7 +1011,10 @@ class Clause(gl.Contract):
             raw = gl.nondet.exec_prompt(_ruling_prompt("appeal", self._public(a), a["outcome"], ap["reason"], txt), response_format="json")
             return json.dumps(_norm_ruling(raw, ("granted", "denied", "partially_granted", "inconclusive"), "inconclusive"), sort_keys=True)
 
-        res = json.loads(gl.eq_principle.prompt_comparative(leader, "Equal if same ruling."))
+        res = json.loads(gl.eq_principle.prompt_comparative(
+            leader,
+            "Equal only if ruling, revisedOutcome, confidenceDeltaBps and riskFlags are exactly identical.",
+        ))
         ap["status"] = res["ruling"]
         ap["ruling"] = res["reason"]
         ap["confidenceDeltaBps"] = res["confidenceDeltaBps"]
@@ -1122,20 +1139,26 @@ class Clause(gl.Contract):
         a = json.loads(self.claims[query_id])
         status = 0
         outcome = a.get("outcome", "pending")
-        if a.get("status") in ("RESOLVED", "ARCHIVED"):
-            if outcome == "met":
-                status = 1
-            elif outcome == "not_met":
-                status = 2
-            else:
-                status = 3
+        if outcome == "met":
+            status = 1
+        elif outcome == "not_met":
+            status = 2
+        elif outcome == "unclear":
+            status = 3
         passage = a.get("passage", "")
         if passage == "":
             passage = a.get("summary", "")
+        maturity = max(int(a.get("challengeDeadline", "0")), int(a.get("appealDeadline", "0")))
+        can_finalize = (a.get("status") in ("CHALLENGE_WINDOW", "APPEALED") and
+                        not self._has_open_filings(a) and _now() >= maturity)
         return {"asker": a.get("opener", ""),
                 "question": a.get("statement", a.get("description", "")),
                 "policy_url": a.get("source_url", a.get("trigger_url", "")),
                 "status": status,
+                "lifecycleStatus": a.get("status", "OPEN"),
+                "challengeDeadline": a.get("challengeDeadline", "0"),
+                "appealDeadline": a.get("appealDeadline", "0"),
+                "canFinalize": can_finalize,
                 "passage": passage,
                 "rationale": a.get("rationale", a.get("summary", "")),
                 "archived": int(a.get("archived", 0))}
